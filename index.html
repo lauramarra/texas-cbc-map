@@ -189,16 +189,10 @@ const W = 680, H = 530;
 
 // Post height to parent so Qualtrics iframe can resize
 function postHeight() {
-  const mapEl = document.getElementById("map");
-  const wrapEl = document.getElementById("wrap");
-  if (!mapEl || !wrapEl) return;
-  const svgWidth = mapEl.getBoundingClientRect().width || window.innerWidth;
-  // SVG viewBox is 680x530 — maintain aspect ratio
-  const mapHeight = svgWidth * (530 / 680);
-  // Add height of anything above the map (search bar etc)
-  const wrapTop = wrapEl.getBoundingClientRect().top;
-  const total = Math.ceil(wrapTop + mapHeight + 20);
-  window.parent.postMessage({ type: "setHeight", height: total }, "*");
+  const w = window.innerWidth || document.documentElement.clientWidth;
+  // SVG viewBox is 680x530 — maintain aspect ratio, add ~80px for search bar
+  const h = Math.ceil(w * (530 / 680)) + 80;
+  window.parent.postMessage({ type: "setHeight", height: h }, "*");
 }
 
 function showTip(mx, my, countyName, reg) {
@@ -277,7 +271,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         const reg = ri !== undefined ? REGIONS[ri] : null;
         d3.selectAll(".county-path").attr("fill", "#333f48");
         d3.select(this).attr("fill", "#4f5f6e");
-        if (!reg) return;
+        if (!reg || !wrap) return;
         const touch = event.touches[0];
         const wrapRect = wrap.getBoundingClientRect();
         showTip(touch.clientX - wrapRect.left, touch.clientY - wrapRect.top, d.properties.name, reg);
@@ -286,7 +280,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         const ri = fipsToRegion[String(d.id)];
         const reg = ri !== undefined ? REGIONS[ri] : null;
         d3.select(this).attr("fill", "#4f5f6e");
-        if (!reg) return;
+        if (!reg || !wrap) return;
         const bbox = this.getBoundingClientRect();
         const wrapRect = wrap.getBoundingClientRect();
         showTip(bbox.left - wrapRect.left + bbox.width / 2, bbox.top - wrapRect.top + bbox.height / 2, d.properties.name, reg);
@@ -348,7 +342,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     mapEl.style.display = "block";
 
     // Send height to parent iframe after map renders
-    setTimeout(postHeight, 100);
+    requestAnimationFrame(() => setTimeout(postHeight, 200));
     window.addEventListener("resize", postHeight);
 
     searchInput.addEventListener("input", function() {
