@@ -115,16 +115,18 @@
   <div id="search-result" role="status" aria-live="polite"></div>
 </div>
 
-<div id="wrap" role="region" aria-label="Interactive map of Texas DFPS CBC regions">
+  <span id="map-desc" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
+    An interactive map of Texas showing all 254 counties grouped into DFPS Community-Based Care regions numbered 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A, and 11B. Use the search box above or hover over counties to identify your region.
+  </span>
   <div id="loading" role="status">Loading map…</div>
   <svg
     id="map"
     viewBox="0 0 680 530"
     role="img"
     aria-label="Map of Texas counties grouped into DFPS CBC regions."
+    aria-describedby="map-desc"
   >
-    <title>Texas DFPS CBC Region Map</title>
-    <desc>An interactive map of Texas showing all 254 counties grouped into DFPS Community-Based Care regions numbered 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A, and 11B.</desc>
+
     <g id="counties-layer"></g>
     <g id="borders-layer" style="pointer-events:none;"></g>
     <g id="labels-layer" style="pointer-events:none;"></g>
@@ -188,11 +190,13 @@ const W = 680, H = 530;
 // Post height to parent so Qualtrics iframe can resize
 function postHeight() {
   const mapEl = document.getElementById("map");
-  const svgWidth = mapEl ? mapEl.getBoundingClientRect().width : window.innerWidth;
+  const wrapEl = document.getElementById("wrap");
+  if (!mapEl || !wrapEl) return;
+  const svgWidth = mapEl.getBoundingClientRect().width || window.innerWidth;
   // SVG viewBox is 680x530 — maintain aspect ratio
   const mapHeight = svgWidth * (530 / 680);
-  // Add height of anything above the map (description + search bar)
-  const wrapTop = document.getElementById("wrap").getBoundingClientRect().top;
+  // Add height of anything above the map (search bar etc)
+  const wrapTop = wrapEl.getBoundingClientRect().top;
   const total = Math.ceil(wrapTop + mapHeight + 20);
   window.parent.postMessage({ type: "setHeight", height: total }, "*");
 }
