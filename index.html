@@ -6,36 +6,172 @@
 <title>Texas DFPS CBC Region Finder</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; background: #fff; padding: 16px; }
 
-  #wrap { position: relative; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #fff;
+    padding: 12px;
+  }
 
+  /* Skip link for keyboard/screen reader users */
+  #skip-link {
+    position: absolute;
+    top: -999px; left: -999px;
+    background: #333f48; color: #fff;
+    padding: 8px 14px; font-size: 14px;
+    border-radius: 4px; z-index: 100;
+    text-decoration: none;
+  }
+  #skip-link:focus {
+    top: 8px; left: 8px;
+  }
+
+  #map-description {
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  /* Search bar */
+  #search-wrap {
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  #search-wrap label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333f48;
+  }
+  #county-search {
+    font-size: 14px;
+    padding: 6px 10px;
+    border: 2px solid #aaa;
+    border-radius: 6px;
+    outline: none;
+    width: 220px;
+    max-width: 100%;
+    color: #111;
+  }
+  #county-search:focus {
+    border-color: #333f48;
+    box-shadow: 0 0 0 3px rgba(51,63,72,0.2);
+  }
+  #search-result {
+    font-size: 13px;
+    min-height: 20px;
+    width: 100%;
+    color: #333;
+    font-weight: 500;
+  }
+  #search-result.not-found { color: #c0392b; }
+
+  /* Map container */
+  #wrap {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  svg#map {
+    width: 100%;
+    height: auto;
+    display: none;
+    /* Make SVG focusable for keyboard nav */
+    outline: none;
+  }
+
+  /* County paths get focus styles via JS */
+  path.county-path:focus {
+    outline: 3px solid #97D5DC;
+    outline-offset: 1px;
+  }
+
+  /* Tooltip */
   #tip {
-    position: absolute; pointer-events: none; opacity: 0;
-    background: #fff; border: 1px solid #ccc;
-    border-radius: 8px; padding: 10px 14px; font-size: 13px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15); max-width: 240px; z-index: 20;
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+    background: #fff;
+    border: 2px solid #333f48;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    max-width: 240px;
+    z-index: 20;
     transition: opacity 0.1s;
   }
   #tip .cn { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 3px; }
-  #tip .rn { font-size: 12px; font-weight: 600; color: #333f48; margin-bottom: 2px; }
-  #tip .ss { font-size: 11px; color: #666; }
+  #tip .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; margin-bottom: 2px; }
+  #tip .ss { font-size: 12px; color: #444; }
+
+  /* Live region for screen readers */
+  #sr-announce {
+    position: absolute;
+    left: -9999px;
+    width: 1px; height: 1px;
+    overflow: hidden;
+  }
 
   #loading { text-align: center; padding: 3rem; font-size: 14px; color: #888; }
 
-  svg#map { width: 100%; height: auto; display: none; }
+  /* Responsive tooltip on small screens */
+  @media (max-width: 480px) {
+    #tip {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      top: auto;
+      max-width: 90vw;
+      width: 90vw;
+    }
+  }
 </style>
 </head>
 <body>
 
-<div id="wrap">
-  <div id="loading">Loading map…</div>
-  <svg id="map" viewBox="0 0 680 530">
+<a href="#county-search" id="skip-link">Skip to county search</a>
+
+<p id="map-description">
+  Hover over or tap any county to see which DFPS CBC region it belongs to.
+  You can also type your county name in the search box below.
+</p>
+
+<div id="search-wrap">
+  <label for="county-search">Lookup region by county:</label>
+  <input
+    id="county-search"
+    type="search"
+    placeholder="e.g. Travis"
+    autocomplete="off"
+    aria-label="Search for a Texas county by name"
+    aria-describedby="search-result"
+  />
+  <div id="search-result" role="status" aria-live="polite"></div>
+</div>
+
+<div id="wrap" role="region" aria-label="Interactive map of Texas DFPS CBC regions">
+  <div id="loading" role="status">Loading map…</div>
+  <svg
+    id="map"
+    viewBox="0 0 680 530"
+    role="img"
+    aria-label="Map of Texas counties grouped into DFPS CBC regions. Use the search box above or hover over counties to identify your region."
+  >
+    <title>Texas DFPS CBC Region Map</title>
+    <desc>An interactive map of Texas showing all 254 counties grouped into DFPS Community-Based Care regions numbered 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A, and 11B.</desc>
     <g id="counties-layer"></g>
     <g id="borders-layer" style="pointer-events:none;"></g>
     <g id="labels-layer" style="pointer-events:none;"></g>
   </svg>
-  <div id="tip"></div>
+  <div id="tip" role="tooltip" aria-hidden="true"></div>
+  <div id="sr-announce" aria-live="polite" aria-atomic="true"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
@@ -48,7 +184,7 @@ const REGIONS = [
     fips:["48009","48023","48049","48059","48077","48083","48093","48101","48133","48151","48155","48197","48207","48237","48253","48263","48275","48335","48337","48353","48399","48415","48417","48429","48433","48441","48447","48485","48487","48503"] },
   { label:"3E",  name:"3E – Metroplex East",                sscc:"EMPOWER",                        legacy:false, nudge:[0,-4],   fs:20,
     fips:["48085","48113","48139","48147","48181","48231","48257","48349","48397"] },
-  { label:"3W",  name:"3W – Metroplex West",                sscc:"Our Community Our Kids (OCOK)",  legacy:false, nudge:[0,0],    fs:20,
+  { label:"3W",  name:"3W – Metroplex West",                sscc:"Our Community Our Kids (OCOK)",  legacy:false, nudge:[0,8],    fs:20,
     fips:["48097","48121","48143","48221","48251","48363","48367","48425","48439","48497"] },
   { label:"4",   name:"4 – Piney Woods",                    sscc:"4Kids4Families",                 legacy:false, nudge:[0,0],    fs:20,
     fips:["48001","48037","48063","48067","48073","48119","48159","48183","48203","48213","48223","48277","48315","48343","48365","48379","48387","48401","48423","48449","48459","48467","48499"] },
@@ -77,14 +213,44 @@ const REGIONS = [
 ];
 
 const fipsToRegion = {};
+const countyNameToFips = {};
 REGIONS.forEach((r, i) => r.fips.forEach(f => { fipsToRegion[f] = i; }));
 
-const tip = document.getElementById("tip");
-const wrap = document.getElementById("wrap");
+const tip       = document.getElementById("tip");
+const wrap      = document.getElementById("wrap");
+const srAnnounce = document.getElementById("sr-announce");
+const searchInput  = document.getElementById("county-search");
+const searchResult = document.getElementById("search-result");
 const countiesLayer = d3.select("#counties-layer");
 const bordersLayer  = d3.select("#borders-layer");
 const labelsLayer   = d3.select("#labels-layer");
 const W = 680, H = 530;
+
+function showTip(mx, my, countyName, reg) {
+  const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
+  tip.innerHTML = `<div class="cn">${countyName} County</div><div class="rn">Region ${reg.name}</div><div class="ss">${sub}</div>`;
+  tip.setAttribute("aria-hidden", "false");
+
+  // On mobile use fixed bottom positioning (CSS handles it)
+  // On desktop position near cursor
+  if (window.innerWidth > 480) {
+    const wrapRect = wrap.getBoundingClientRect();
+    let lx = mx + 14, ly = my - 14;
+    if (lx + 245 > W) lx = mx - 250;
+    if (ly + 105 > H + 40) ly = my - 105;
+    tip.style.left = lx + "px";
+    tip.style.top  = ly + "px";
+  }
+  tip.style.opacity = "1";
+
+  // Announce to screen readers
+  srAnnounce.textContent = `${countyName} County — Region ${reg.name}. ${sub}.`;
+}
+
+function hideTip() {
+  tip.style.opacity = "0";
+  tip.setAttribute("aria-hidden", "true");
+}
 
 fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
   .then(r => r.json())
@@ -94,6 +260,12 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     const txFeatures  = allCounties.features.filter(f => String(f.id).startsWith("48"));
     const txCounties  = { type: "FeatureCollection", features: txFeatures };
     const txState     = allStates.features.find(f => String(f.id) === "48");
+
+    // Build county name lookup for search
+    txFeatures.forEach(f => {
+      const name = f.properties.name.toLowerCase();
+      countyNameToFips[name] = String(f.id);
+    });
 
     const path0 = d3.geoPath();
     const [[x0, y0], [x1, y1]] = path0.bounds(txCounties);
@@ -105,38 +277,73 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     });
     const path = d3.geoPath().projection(proj);
 
-    // Layer 1: county fills
+    // Layer 1: county fills — mouse + touch + keyboard
     countiesLayer.selectAll("path")
       .data(txFeatures).join("path")
+      .attr("class", "county-path")
       .attr("d", path)
       .attr("fill", "#333f48")
       .attr("stroke", "rgba(255,255,255,0.35)")
       .attr("stroke-width", "0.5")
       .attr("cursor", "pointer")
+      .attr("tabindex", "0")
+      .attr("role", "button")
+      .attr("aria-label", d => {
+        const ri = fipsToRegion[String(d.id)];
+        const reg = ri !== undefined ? REGIONS[ri] : null;
+        return reg
+          ? `${d.properties.name} County — Region ${reg.name}`
+          : `${d.properties.name} County`;
+      })
+      // Mouse
       .on("mousemove", function(event, d) {
         const ri = fipsToRegion[String(d.id)];
         const reg = ri !== undefined ? REGIONS[ri] : null;
         d3.select(this).attr("fill", "#4f5f6e");
+        if (!reg) return;
         const [mx, my] = d3.pointer(event, wrap);
-        let lx = mx + 14, ly = my - 14;
-        if (lx + 245 > W) lx = mx - 250;
-        if (ly + 105 > H + 40) ly = my - 105;
-        tip.style.left = lx + "px";
-        tip.style.top  = ly + "px";
-        tip.style.opacity = "1";
-        if (reg) {
-          const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
-          tip.innerHTML = `<div class="cn">${d.properties.name} County</div><div class="rn">Region ${reg.name}</div><div class="ss">${sub}</div>`;
-        } else {
-          tip.innerHTML = `<div class="cn">${d.properties.name} County</div>`;
-        }
+        showTip(mx, my, d.properties.name, reg);
       })
       .on("mouseleave", function() {
         d3.select(this).attr("fill", "#333f48");
-        tip.style.opacity = "0";
+        hideTip();
+      })
+      // Touch
+      .on("touchstart", function(event, d) {
+        event.preventDefault();
+        const ri = fipsToRegion[String(d.id)];
+        const reg = ri !== undefined ? REGIONS[ri] : null;
+        d3.selectAll(".county-path").attr("fill", "#333f48");
+        d3.select(this).attr("fill", "#4f5f6e");
+        if (!reg) return;
+        const touch = event.touches[0];
+        const wrapRect = wrap.getBoundingClientRect();
+        showTip(touch.clientX - wrapRect.left, touch.clientY - wrapRect.top, d.properties.name, reg);
+      })
+      // Keyboard
+      .on("focus", function(event, d) {
+        const ri = fipsToRegion[String(d.id)];
+        const reg = ri !== undefined ? REGIONS[ri] : null;
+        d3.select(this).attr("fill", "#4f5f6e");
+        if (!reg) return;
+        const bbox = this.getBoundingClientRect();
+        const wrapRect = wrap.getBoundingClientRect();
+        const mx = bbox.left - wrapRect.left + bbox.width / 2;
+        const my = bbox.top  - wrapRect.top  + bbox.height / 2;
+        showTip(mx, my, d.properties.name, reg);
+      })
+      .on("blur", function() {
+        d3.select(this).attr("fill", "#333f48");
+        hideTip();
+      })
+      .on("keydown", function(event, d) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          this.dispatchEvent(new Event("focus"));
+        }
       });
 
-    // Layer 2: thick white region borders — permanent, never touched by hover
+    // Layer 2: thick white region borders
     const regionMesh = topojson.mesh(us, us.objects.counties, (a, b) => {
       if (!String(a.id).startsWith("48") || !String(b.id).startsWith("48")) return false;
       return fipsToRegion[String(a.id)] !== fipsToRegion[String(b.id)];
@@ -148,7 +355,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .attr("fill", "none")
       .attr("stroke", "#ffffff")
       .attr("stroke-width", "3")
-      .attr("stroke-linejoin", "round")
+      
       .attr("stroke-linecap", "round");
 
     bordersLayer.append("path")
@@ -157,7 +364,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .attr("fill", "none")
       .attr("stroke", "#ffffff")
       .attr("stroke-width", "3")
-      .attr("stroke-linejoin", "round");
+      ;
 
     // Layer 3: region labels
     REGIONS.forEach(reg => {
@@ -188,15 +395,59 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         .attr("font-size", reg.fs)
         .attr("font-weight", "700")
         .attr("fill", "#97D5DC")
-        .attr("paint-order", "stroke")
-        .attr("stroke", "#1a2630")
-        .attr("stroke-width", reg.fs * 0.4)
-        .attr("stroke-linejoin", "round")
+        .attr("aria-hidden", "true")
+        
+        
+        
+        
         .text(reg.label);
     });
 
     document.getElementById("loading").style.display = "none";
     document.getElementById("map").style.display = "block";
+
+    // Search functionality
+    searchInput.addEventListener("input", function() {
+      const val = this.value.trim().toLowerCase().replace(/\s*county\s*$/i, "");
+      searchResult.textContent = "";
+      searchResult.className = "";
+      d3.selectAll(".county-path").attr("fill", "#333f48").attr("opacity", 1);
+      hideTip();
+
+      if (!val) return;
+
+      const fips = countyNameToFips[val];
+      if (fips) {
+        const ri = fipsToRegion[fips];
+        const reg = ri !== undefined ? REGIONS[ri] : null;
+        if (reg) {
+          const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
+          searchResult.textContent = `${val.replace(/\b\w/g, c => c.toUpperCase())} County → Region ${reg.name} (${sub})`;
+          // Highlight matching region, dim others
+          d3.selectAll(".county-path")
+            .attr("opacity", d => fipsToRegion[String(d.id)] === ri ? 1 : 0.3)
+            .attr("fill", d => fipsToRegion[String(d.id)] === ri ? "#4f5f6e" : "#333f48");
+        }
+      } else {
+        // Suggest close matches
+        const matches = Object.keys(countyNameToFips).filter(c => c.startsWith(val)).slice(0, 4);
+        if (matches.length) {
+          searchResult.textContent = `Did you mean: ${matches.map(m => m.replace(/\b\w/g, c => c.toUpperCase())).join(", ")}?`;
+        } else {
+          searchResult.textContent = "County not found. Try without \"County\".";
+          searchResult.className = "not-found";
+        }
+      }
+    });
+
+    searchInput.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") {
+        this.value = "";
+        searchResult.textContent = "";
+        d3.selectAll(".county-path").attr("fill", "#333f48").attr("opacity", 1);
+        hideTip();
+      }
+    });
   });
 </script>
 </body>
