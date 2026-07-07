@@ -181,6 +181,7 @@ const REGIONS = [
 ];
 
 const fipsToRegion = {};
+let selectedPath = null;
 const countyNameToFips = {};
 REGIONS.forEach((r, i) => r.fips.forEach(f => { fipsToRegion[f] = i; }));
 
@@ -274,27 +275,35 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       })
       .on("mouseenter", function() { cancelHideTip(); })
       .on("mousemove", function(event, d) {
-        const ri = fipsToRegion[String(d.id)];
-        const reg = ri !== undefined ? REGIONS[ri] : null;
-        d3.select(this).attr("fill", "#4f5f6e");
-        if (!reg) return;
+        if (this !== selectedPath) d3.select(this).attr("fill", "#4f5f6e");
         const [mx, my] = d3.pointer(event, wrap);
-        showTip(mx, my, d.properties.name, reg);
+        // Hover shows county name only
+        let lx = mx + 14, ly = my - 14;
+        if (lx + 245 > W) lx = mx - 250;
+        if (ly + 50 > H + 40) ly = my - 50;
+        tip.style.left = lx + "px";
+        tip.style.top = ly + "px";
+        tip.innerHTML = "<div class='cn'>" + d.properties.name + " County</div><div class='ss' style='color:#888;font-style:italic;'>Click to see region</div>";
+        tip.setAttribute("aria-hidden", "false");
+        tip.style.opacity = "1";
+        cancelHideTip();
       })
       .on("mouseleave", function() {
-        d3.select(this).attr("fill", "#333f48");
+        if (this !== selectedPath) d3.select(this).attr("fill", "#333f48");
         // Don't hide tip here — let SVG boundary handle it
       })
-      .on("touchstart", function(event, d) {
+      .on("click touchend", function(event, d) {
         event.preventDefault();
         const ri = fipsToRegion[String(d.id)];
         const reg = ri !== undefined ? REGIONS[ri] : null;
-        d3.selectAll(".county-path").attr("fill", "#333f48");
-        d3.select(this).attr("fill", "#4f5f6e");
         if (!reg) return;
+        // Reset previous selection
+        d3.selectAll(".county-path").attr("fill", "#333f48");
+        // Highlight selected county
+        selectedPath = this;
+        d3.select(this).attr("fill", "#4f5f6e");
         const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
         const html = "<div class='cn'>" + d.properties.name + " County</div><div class='rn'>Region " + reg.name + "</div><div class='ss'>" + sub + "</div>";
-        // Show inline below map on mobile
         const mobileTip = document.getElementById("mobile-tip");
         if (mobileTip) { mobileTip.innerHTML = html; mobileTip.style.display = "block"; }
         srAnnounce.textContent = d.properties.name + " County — Region " + reg.name + ". " + sub + ".";
@@ -323,6 +332,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     d3.select("#map").on("mouseleave", function() {
       if (!isTouchDevice()) {
         d3.selectAll(".county-path").attr("fill", "#333f48");
+        selectedPath = null;
         hideTip();
       }
     });
