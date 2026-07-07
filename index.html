@@ -65,28 +65,33 @@
     outline: none;
   }
 
-  /* Tooltip — fixed to bottom on mobile, floating on desktop */
+  /* Tooltip */
   #tip {
     position: absolute;
     pointer-events: none; opacity: 0;
     background: #fff; border: 2px solid #333f48;
     border-radius: 8px; padding: 10px 14px; font-size: 13px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-    max-width: 240px; z-index: 20;
-    transition: opacity 0.1s;
+    max-width: 240px; z-index: 100;
+    transition: opacity 0.15s;
   }
   #tip .cn { font-size: 15px; font-weight: 700; color: #333f48; margin-bottom: 3px; }
   #tip .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; margin-bottom: 2px; }
   #tip .ss { font-size: 12px; color: #444; }
 
-  @media (max-width: 480px) {
-    #tip {
-      position: fixed;
-      bottom: 16px; left: 50%;
-      transform: translateX(-50%);
-      top: auto; max-width: 90vw; width: 90vw;
-    }
+  /* Mobile info bar — shown below map on touch */
+  #mobile-tip {
+    display: none;
+    background: #fff;
+    border: 2px solid #333f48;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 8px;
+    font-size: 13px;
   }
+  #mobile-tip .cn { font-size: 15px; font-weight: 700; color: #333f48; margin-bottom: 3px; }
+  #mobile-tip .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; margin-bottom: 2px; }
+  #mobile-tip .ss { font-size: 12px; color: #444; }
 
   #sr-announce {
     position: absolute; left: -9999px;
@@ -127,11 +132,13 @@
     aria-describedby="map-desc"
   >
 
+    <rect id="map-bg" width="680" height="530" fill="transparent"></rect>
     <g id="counties-layer"></g>
     <g id="borders-layer" style="pointer-events:none;"></g>
     <g id="labels-layer" style="pointer-events:none;"></g>
   </svg>
   <div id="tip" role="tooltip" aria-hidden="true"></div>
+  <div id="mobile-tip" aria-live="polite"></div>
   <div id="sr-announce" aria-live="polite" aria-atomic="true"></div>
 </div>
 
@@ -210,9 +217,21 @@ function showTip(mx, my, countyName, reg) {
   srAnnounce.textContent = `${countyName} County — Region ${reg.name}. ${sub}.`;
 }
 
+let hideTipTimer = null;
+
 function hideTip() {
-  tip.style.opacity = "0";
-  tip.setAttribute("aria-hidden", "true");
+  hideTipTimer = setTimeout(() => {
+    tip.style.opacity = "0";
+    tip.setAttribute("aria-hidden", "true");
+  }, 120);
+}
+
+function cancelHideTip() {
+  if (hideTipTimer) { clearTimeout(hideTipTimer); hideTipTimer = null; }
+}
+
+function isTouchDevice() {
+  return window.matchMedia("(hover: none)").matches;
 }
 
 fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
@@ -253,6 +272,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         const reg = ri !== undefined ? REGIONS[ri] : null;
         return reg ? `${d.properties.name} County — Region ${reg.name}` : `${d.properties.name} County`;
       })
+      .on("mouseenter", function() { cancelHideTip(); })
       .on("mousemove", function(event, d) {
         const ri = fipsToRegion[String(d.id)];
         const reg = ri !== undefined ? REGIONS[ri] : null;
@@ -263,7 +283,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       })
       .on("mouseleave", function() {
         d3.select(this).attr("fill", "#333f48");
-        hideTip();
+        // Don't hide tip here — let SVG boundary handle it
       })
       .on("touchstart", function(event, d) {
         event.preventDefault();
@@ -271,10 +291,13 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         const reg = ri !== undefined ? REGIONS[ri] : null;
         d3.selectAll(".county-path").attr("fill", "#333f48");
         d3.select(this).attr("fill", "#4f5f6e");
-        if (!reg || !wrap) return;
-        const touch = event.touches[0];
-        const wrapRect = wrap.getBoundingClientRect();
-        showTip(touch.clientX - wrapRect.left, touch.clientY - wrapRect.top, d.properties.name, reg);
+        if (!reg) return;
+        const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
+        const html = "<div class='cn'>" + d.properties.name + " County</div><div class='rn'>Region " + reg.name + "</div><div class='ss'>" + sub + "</div>";
+        // Show inline below map on mobile
+        const mobileTip = document.getElementById("mobile-tip");
+        if (mobileTip) { mobileTip.innerHTML = html; mobileTip.style.display = "block"; }
+        srAnnounce.textContent = d.properties.name + " County — Region " + reg.name + ". " + sub + ".";
       })
       .on("focus", function(event, d) {
         const ri = fipsToRegion[String(d.id)];
@@ -295,6 +318,14 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
           this.dispatchEvent(new Event("focus"));
         }
       });
+
+    // Hide tooltip only when mouse truly leaves the SVG
+    d3.select("#map").on("mouseleave", function() {
+      if (!isTouchDevice()) {
+        d3.selectAll(".county-path").attr("fill", "#333f48");
+        hideTip();
+      }
+    });
 
     const regionMesh = topojson.mesh(us, us.objects.counties, (a, b) => {
       if (!String(a.id).startsWith("48") || !String(b.id).startsWith("48")) return false;
