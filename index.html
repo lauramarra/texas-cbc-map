@@ -9,10 +9,11 @@
 
   html, body {
     width: 100%;
-    overflow-x: hidden;
+    overflow: hidden;
     font-family: Arial, sans-serif;
     background: #fff;
-    padding: 10px;
+    padding: 0;
+    margin: 0;
   }
 
   #skip-link {
@@ -191,8 +192,14 @@ const W = 680, H = 530;
 
 // Post height to parent so Qualtrics iframe can resize
 function postHeight() {
-  const h = document.body.scrollHeight;
-  window.parent.postMessage({ type: "setHeight", height: h }, "*");
+  const mapEl = document.getElementById("map");
+  const svgWidth = mapEl ? mapEl.getBoundingClientRect().width : window.innerWidth;
+  // SVG viewBox is 680x530 — maintain aspect ratio
+  const mapHeight = svgWidth * (530 / 680);
+  // Add height of anything above the map (description + search bar)
+  const wrapTop = document.getElementById("wrap").getBoundingClientRect().top;
+  const total = Math.ceil(wrapTop + mapHeight + 20);
+  window.parent.postMessage({ type: "setHeight", height: total }, "*");
 }
 
 function showTip(mx, my, countyName, reg) {
