@@ -79,15 +79,21 @@
   #tip .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; margin-bottom: 2px; }
   #tip .ss { font-size: 12px; color: #444; }
 
-  /* Mobile info bar — shown below map on touch */
+  /* Mobile info box — overlaid at bottom of map */
   #mobile-tip {
     display: none;
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
     background: #fff;
     border: 2px solid #333f48;
     border-radius: 8px;
     padding: 10px 14px;
-    margin-top: 8px;
     font-size: 13px;
+    z-index: 50;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   }
   #mobile-tip .cn { font-size: 15px; font-weight: 700; color: #333f48; margin-bottom: 3px; }
   #mobile-tip .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; margin-bottom: 2px; }
