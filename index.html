@@ -9,7 +9,8 @@
 
   html, body {
     width: 100%;
-    overflow-x: hidden;
+    min-height: 100%;
+    overflow: hidden;
     font-family: Arial, sans-serif;
     background: #fff;
   }
@@ -24,7 +25,8 @@
   #skip-link:focus { top: 8px; left: 8px; }
 
   #search-wrap {
-    margin-bottom: 10px;
+    margin: 0 auto 10px auto;
+    max-width: 700px;
     display: flex; flex-wrap: wrap;
     align-items: center; gap: 8px;
   }
@@ -46,7 +48,17 @@
   }
   #search-result.not-found { color: #c0392b; font-weight: 500; }
 
-  #wrap { position: relative; width: 100%; max-width: 700px; margin: 0 auto; }
+  /*
+    GitHub/preview-first sizing:
+    shrink the map if the viewing frame is short, so the whole map is visible
+    without creating a second scrollbar inside the map page.
+  */
+  #wrap {
+    position: relative;
+    width: 100%;
+    max-width: min(700px, calc((100dvh - 92px) * 680 / 530));
+    margin: 0 auto;
+  }
 
   svg#map { width: 100%; height: auto; display: none; }
 
@@ -174,11 +186,11 @@ function highlightCounty(pathEl) {
   d3.select(pathEl).attr("fill", "#bf5700").attr("fill-opacity", 1);
 }
 
-// Light hover tooltip (desktop): county + region
+// Light hover tooltip (desktop): county + region name
 function showHoverTip(mx, my, countyName, reg) {
   let lx = mx + 14, ly = my - 14;
   if (lx + 245 > W) lx = mx - 250;
-  if (ly + 60 > H + 40) ly = my - 60;
+  if (ly + 70 > H + 40) ly = my - 70;
   tip.style.left = lx + "px";
   tip.style.top  = ly + "px";
   tip.innerHTML =
@@ -195,8 +207,7 @@ function hideHoverTip() {
 
 // Shared result line — updated by search, click/tap, and keyboard
 function showResult(countyName, reg) {
-  resultLine.innerHTML =
-    "<strong>" + countyName + " County</strong> &rarr; Region " + reg.name;
+  resultLine.textContent = countyName + " County → Region " + reg.name;
   resultLine.className = "";
   srAnnounce.textContent = countyName + " County — Region " + reg.name + ".";
   setTimeout(postHeight, 50);
@@ -217,10 +228,11 @@ function selectCounty(pathEl, countyName, reg) {
 
 // --- Iframe auto-height --------------------------------------------------
 function postHeight() {
-  const wrapEl = document.getElementById("wrap");
-  // Actual rendered map width (capped at 700px via CSS)
-  const mapW = wrapEl ? wrapEl.clientWidth : Math.min(700, window.innerWidth);
-  const h = Math.ceil(mapW * (H / W)) + 140; // map height + search/result area
+  // For embeds: tell the parent the height of the visible content.
+  // Avoid document scrollHeight here because iframe scrollbars can inflate it.
+  const searchRect = document.getElementById("search-wrap").getBoundingClientRect();
+  const wrapRect = document.getElementById("wrap").getBoundingClientRect();
+  const h = Math.ceil(searchRect.height + 10 + wrapRect.height + 8);
   window.parent.postMessage({ type: "setHeight", height: h }, "*");
 }
 
@@ -289,7 +301,8 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         if (this !== selectedPath) d3.select(this).attr("fill", "#4b5c68").attr("fill-opacity", 1);
         const b = this.getBoundingClientRect();
         const r = wrap.getBoundingClientRect();
-        showHoverTip(b.left - r.left + b.width / 2, b.top - r.top + b.height / 2, d.properties.name, regionOf(d));
+        const reg = regionOf(d);
+        showHoverTip(b.left - r.left + b.width / 2, b.top - r.top + b.height / 2, d.properties.name, reg);
       })
       .on("blur", function () {
         if (this !== selectedPath) d3.select(this).attr("fill", "#333f48").attr("fill-opacity", 1);
