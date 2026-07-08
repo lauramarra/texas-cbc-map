@@ -33,15 +33,53 @@
   #search-wrap label {
     font-size: 14px; font-weight: 600; color: #333f48;
   }
+  #county-search-box {
+    position: relative;
+    width: 280px;
+    max-width: 100%;
+  }
   #county-search {
-    font-size: 14px; padding: 6px 10px;
+    font-size: 14px; padding: 8px 10px;
     border: 2px solid #aaa; border-radius: 6px;
-    outline: none; width: 220px; max-width: 100%; color: #333f48;
+    outline: none; width: 100%; max-width: 100%; color: #333f48;
   }
   #county-search:focus {
     border-color: #333f48;
     box-shadow: 0 0 0 3px rgba(51,63,72,0.2);
   }
+
+  /* Custom autocomplete list; used instead of datalist for reliable mobile support */
+  #county-suggestions {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: calc(100% + 3px);
+    list-style: none;
+    width: 100%;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 2px solid #333f48;
+    border-radius: 0 0 8px 8px;
+    background: #fff;
+    color: #333f48;
+    font-size: 14px;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.18);
+    z-index: 300;
+  }
+  #county-suggestions.show { display: block; }
+  #county-suggestions li {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  #county-suggestions li:hover,
+  #county-suggestions li[aria-selected="true"] {
+    background: #e7eef2;
+    outline: none;
+  }
+
   #search-result {
     font-size: 15px; min-height: 22px;
     width: 100%; color: #333f48; font-weight: 700;
@@ -98,16 +136,17 @@
 
 <div id="search-wrap">
   <label for="county-search" id="county-search-label">Lookup region by county:</label>
-  <input
-    id="county-search"
-    type="search"
-    placeholder="e.g. Travis"
-    autocomplete="off"
-    aria-label="Search for a Texas county by name"
-    aria-describedby="search-result"
-    list="county-list"
-  />
-  <datalist id="county-list"></datalist>
+  <div id="county-search-box">
+    <input
+      id="county-search"
+      type="search"
+      placeholder="e.g. Travis"
+      autocomplete="off"
+      aria-label="Search for a Texas county by name"
+      aria-describedby="search-result"
+    />
+    <ul id="county-suggestions" role="listbox" aria-label="County suggestions"></ul>
+  </div>
   <div id="search-result" role="status" aria-live="polite"></div>
 </div>
 
@@ -181,6 +220,11 @@ function applyStaticText() {
   document.getElementById("county-search-label").textContent = TEXT.label;
   searchInput.setAttribute("placeholder", TEXT.placeholder);
   searchInput.setAttribute("aria-label", TEXT.searchAria);
+  searchInput.setAttribute("role", "combobox");
+  searchInput.setAttribute("aria-autocomplete", "list");
+  searchInput.setAttribute("aria-expanded", "false");
+  searchInput.setAttribute("aria-controls", "county-suggestions");
+  suggestions.setAttribute("aria-label", IS_ES ? "Sugerencias de condados" : "County suggestions");
   document.getElementById("wrap").setAttribute("aria-label", TEXT.mapRegionAria);
   document.getElementById("map").setAttribute("aria-label", TEXT.mapAria);
   document.getElementById("map-desc").textContent = TEXT.mapDesc;
@@ -243,7 +287,7 @@ const tip          = document.getElementById("tip");
 const wrap         = document.getElementById("wrap");
 const srAnnounce   = document.getElementById("sr-announce");
 const searchInput  = document.getElementById("county-search");
-const countyList   = document.getElementById("county-list");
+const suggestions  = document.getElementById("county-suggestions");
 const resultLine   = document.getElementById("search-result");
 const W = 680, H = 530;
 
@@ -341,15 +385,12 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
 
     txFeatures.forEach(f => { countyNameToFips[f.properties.name.toLowerCase()] = String(f.id); });
 
-    // Native selectable autocomplete for county search.
-    // Keeps keyboard/mobile behavior accessible while allowing users to choose a county.
+    // County names used by the custom autocomplete.
     const countyNames = Object.keys(countyNameToFips)
       .map(cap)
       .sort((a, b) => a.localeCompare(b));
 
-    countyList.innerHTML = countyNames
-      .map(name => "<option value=\"" + name + "\"></option>")
-      .join("");
+    let activeSuggestionIndex = -1;
 
     // Fit projection to Texas
     const p0 = d3.geoPath();
@@ -477,40 +518,147 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     requestAnimationFrame(() => setTimeout(postHeight, 200));
     window.addEventListener("resize", postHeight);
 
+
+    function hideSuggestions() {
+      suggestions.classList.remove("show");
+      suggestions.innerHTML = "";
+      activeSuggestionIndex = -1;
+      searchInput.setAttribute("aria-expanded", "false");
+      searchInput.removeAttribute("aria-activedescendant");
+    }
+
+    function chooseCountyFromSearch(countyName) {
+      const key = countyName.toLowerCase();
+      const fips = countyNameToFips[key];
+      if (!fips) return false;
+
+      const reg = REGIONS[fipsToRegion[fips]];
+      const pathEl = countyPaths.filter(d => String(d.id) === fips).node();
+
+      if (pathEl && reg) {
+        selectCounty(pathEl, cap(key), reg);
+        hideSuggestions();
+        return true;
+      }
+
+      return false;
+    }
+
+    function renderSuggestions(value) {
+      const val = stripCountyWords(value);
+      if (!val) {
+        hideSuggestions();
+        return;
+      }
+
+      const matches = countyNames
+        .filter(name => name.toLowerCase().startsWith(val))
+        .slice(0, 8);
+
+      if (!matches.length) {
+        hideSuggestions();
+        return;
+      }
+
+      suggestions.innerHTML = matches.map((name, index) =>
+        "<li id=\"county-suggestion-" + index + "\" role=\"option\" aria-selected=\"false\" data-county=\"" + name + "\">" + name + "</li>"
+      ).join("");
+
+      suggestions.classList.add("show");
+      searchInput.setAttribute("aria-expanded", "true");
+      activeSuggestionIndex = -1;
+    }
+
+    function updateActiveSuggestion(newIndex) {
+      const items = suggestions.querySelectorAll("li");
+      if (!items.length) return;
+
+      if (newIndex < 0) newIndex = items.length - 1;
+      if (newIndex >= items.length) newIndex = 0;
+
+      items.forEach((item, index) => {
+        item.setAttribute("aria-selected", index === newIndex ? "true" : "false");
+      });
+
+      activeSuggestionIndex = newIndex;
+      searchInput.setAttribute("aria-activedescendant", items[newIndex].id);
+      items[newIndex].scrollIntoView({ block: "nearest" });
+    }
+
+    suggestions.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+      const item = event.target.closest("li[data-county]");
+      if (item) chooseCountyFromSearch(item.getAttribute("data-county"));
+    });
+
+    document.addEventListener("click", function (event) {
+      if (!document.getElementById("search-wrap").contains(event.target)) {
+        hideSuggestions();
+      }
+    });
+
+
     // Search — highlights the matching county and shows its region
     searchInput.addEventListener("input", function () {
       const val = stripCountyWords(this.value);
       clearHighlights();
       hideHoverTip();
       selectedPath = null;
-      if (!val) { clearResult(); return; }
+
+      if (!val) {
+        hideSuggestions();
+        clearResult();
+        return;
+      }
+
+      renderSuggestions(this.value);
 
       const fips = countyNameToFips[val];
       if (fips) {
-        const reg = REGIONS[fipsToRegion[fips]];
-        // Select that county so search and map agree
-        const pathEl = countyPaths.filter(d => String(d.id) === fips).node();
-        if (pathEl) selectCounty(pathEl, cap(val), reg);
+        chooseCountyFromSearch(cap(val));
       } else {
         const matches = Object.keys(countyNameToFips).filter(c => c.startsWith(val)).slice(0, 4);
-        if (matches.length) {
-          resultLine.textContent = TEXT.didYouMean + matches.map(cap).join(", ") + TEXT.didYouMeanEnd;
-          resultLine.className = "";
-        } else {
-          resultLine.textContent = TEXT.notFound;
-          resultLine.className = "not-found";
-        }
+        resultLine.textContent = "";
+        resultLine.className = "";
         setTimeout(postHeight, 50);
       }
     });
 
+    searchInput.addEventListener("focus", function () {
+      renderSuggestions(this.value);
+    });
+
     searchInput.addEventListener("keydown", function (e) {
+      const items = suggestions.querySelectorAll("li");
+
+      if (e.key === "ArrowDown" && items.length) {
+        e.preventDefault();
+        updateActiveSuggestion(activeSuggestionIndex + 1);
+        return;
+      }
+
+      if (e.key === "ArrowUp" && items.length) {
+        e.preventDefault();
+        updateActiveSuggestion(activeSuggestionIndex - 1);
+        return;
+      }
+
+      if (e.key === "Enter" && activeSuggestionIndex >= 0 && items[activeSuggestionIndex]) {
+        e.preventDefault();
+        chooseCountyFromSearch(items[activeSuggestionIndex].getAttribute("data-county"));
+        return;
+      }
+
       if (e.key === "Escape") {
-        this.value = "";
-        clearHighlights();
-        hideHoverTip();
-        selectedPath = null;
-        clearResult();
+        if (suggestions.classList.contains("show")) {
+          hideSuggestions();
+        } else {
+          this.value = "";
+          clearHighlights();
+          hideHoverTip();
+          selectedPath = null;
+          clearResult();
+        }
       }
     });
   });
