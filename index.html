@@ -97,7 +97,7 @@
 <a href="#county-search" id="skip-link">Skip to county search</a>
 
 <div id="search-wrap">
-  <label for="county-search">Lookup region by county:</label>
+  <label for="county-search" id="county-search-label">Lookup region by county:</label>
   <input
     id="county-search"
     type="search"
@@ -130,6 +130,71 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 <script>
+
+// --- Language support ----------------------------------------------------
+// Qualtrics can pass ?lang=${e://Field/Q_Language}; Spanish usually appears as ES.
+// County names remain official Texas county names; surrounding UI text is translated.
+const params = new URLSearchParams(window.location.search);
+const surveyLang = (params.get("lang") || params.get("Q_Language") || "EN").toUpperCase();
+const IS_ES = surveyLang.startsWith("ES");
+
+const TEXT = IS_ES ? {
+  htmlLang: "es",
+  skip: "Ir a la búsqueda de condados",
+  label: "Buscar región por condado:",
+  placeholder: "p. ej., Travis",
+  searchAria: "Buscar un condado de Texas por nombre",
+  mapRegionAria: "Mapa interactivo de las regiones CBC de DFPS en Texas",
+  mapAria: "Mapa de los condados de Texas agrupados por regiones CBC de DFPS.",
+  mapDesc: "Un mapa interactivo de Texas que muestra los 254 condados agrupados en regiones de Cuidado Basado en la Comunidad de DFPS numeradas 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A y 11B. Use el cuadro de búsqueda, pase el cursor sobre los condados o use la tecla Tab para llegar a un condado y presione Enter o la barra espaciadora para identificar su región.",
+  loading: "Cargando mapa…",
+  countySuffix: "County",
+  countyDisplay: name => "Condado de " + name,
+  regionPrefix: "Región ",
+  selected: "Seleccionado ",
+  notFound: "No se encontró el condado. Intente sin “County” o “Condado”.",
+  didYouMean: "¿Quiso decir: ",
+  didYouMeanEnd: "?"
+} : {
+  htmlLang: "en",
+  skip: "Skip to county search",
+  label: "Lookup region by county:",
+  placeholder: "e.g. Travis",
+  searchAria: "Search for a Texas county by name",
+  mapRegionAria: "Interactive map of Texas DFPS CBC regions",
+  mapAria: "Map of Texas counties grouped into DFPS CBC regions.",
+  mapDesc: "An interactive map of Texas showing all 254 counties grouped into DFPS Community-Based Care regions numbered 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A, and 11B. Use the search box above, hover over counties, or tab to a county and press Enter or Space to identify your region.",
+  loading: "Loading map…",
+  countySuffix: "County",
+  countyDisplay: name => name + " County",
+  regionPrefix: "Region ",
+  selected: "Selected ",
+  notFound: "County not found. Try without “County”.",
+  didYouMean: "Did you mean: ",
+  didYouMeanEnd: "?"
+};
+
+document.documentElement.lang = TEXT.htmlLang;
+
+function applyStaticText() {
+  document.getElementById("skip-link").textContent = TEXT.skip;
+  document.getElementById("county-search-label").textContent = TEXT.label;
+  searchInput.setAttribute("placeholder", TEXT.placeholder);
+  searchInput.setAttribute("aria-label", TEXT.searchAria);
+  document.getElementById("wrap").setAttribute("aria-label", TEXT.mapRegionAria);
+  document.getElementById("map").setAttribute("aria-label", TEXT.mapAria);
+  document.getElementById("map-desc").textContent = TEXT.mapDesc;
+  document.getElementById("loading").textContent = TEXT.loading;
+}
+
+function stripCountyWords(value) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^\s*condado\s+de\s+/i, "")
+    .replace(/\s*(county|condado)\s*$/i, "");
+}
+
 const REGIONS = [
   { label:"1",   name:"1 – Panhandle",                      sscc:"Saint Francis Ministries",      legacy:false, nudge:[0,0],    fs:20,
     fips:["48011","48017","48045","48065","48069","48075","48079","48087","48107","48111","48117","48125","48129","48153","48169","48179","48189","48191","48195","48205","48211","48219","48233","48269","48279","48295","48303","48305","48341","48345","48357","48359","48369","48375","48381","48393","48421","48437","48445","48483","48501"] },
@@ -182,6 +247,8 @@ const countyList   = document.getElementById("county-list");
 const resultLine   = document.getElementById("search-result");
 const W = 680, H = 530;
 
+applyStaticText();
+
 let selectedPath = null;
 const TOUCH = window.matchMedia("(hover: none)").matches;
 
@@ -206,8 +273,8 @@ function showHoverTip(mx, my, countyName, reg) {
   tip.style.left = lx + "px";
   tip.style.top  = ly + "px";
   tip.innerHTML =
-    "<div class='cn'>" + countyName + " County</div>" +
-    (reg ? "<div class='rn'>Region " + reg.name + "</div>" : "");
+    "<div class='cn'>" + TEXT.countyDisplay(countyName) + "</div>" +
+    (reg ? "<div class='rn'>" + TEXT.regionPrefix + reg.name + "</div>" : "");
   tip.setAttribute("aria-hidden", "false");
   tip.style.opacity = "1";
 }
@@ -219,9 +286,9 @@ function hideHoverTip() {
 
 // Shared result line — updated by search, click/tap, and keyboard
 function showResult(countyName, reg) {
-  resultLine.textContent = countyName + " County → Region " + reg.name;
+  resultLine.textContent = TEXT.countyDisplay(countyName) + " → " + TEXT.regionPrefix + reg.name;
   resultLine.className = "";
-  srAnnounce.textContent = "Selected " + countyName + " County. Region " + reg.name + ".";
+  srAnnounce.textContent = TEXT.selected + TEXT.countyDisplay(countyName) + ". " + TEXT.regionPrefix + reg.name + ".";
   setTimeout(postHeight, 50);
 }
 
@@ -239,7 +306,7 @@ function selectCounty(pathEl, countyName, reg) {
 
   // Keep the county lookup field in sync with map clicks/taps/keyboard selection.
   // This prevents an old typed county from remaining in the search box after a map selection.
-  searchInput.value = countyName;
+  searchInput.value = IS_ES ? TEXT.countyDisplay(countyName) : countyName;
 
   highlightCounty(pathEl);
   showResult(countyName, reg);
@@ -281,7 +348,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .sort((a, b) => a.localeCompare(b));
 
     countyList.innerHTML = countyNames
-      .map(name => "<option value=\"" + name + "\"></option>")
+      .map(name => "<option value=\"" + (IS_ES ? TEXT.countyDisplay(name) : name) + "\"></option>")
       .join("");
 
     // Fit projection to Texas
@@ -308,7 +375,9 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .attr("aria-pressed", "false")
       .attr("aria-label", d => {
         const reg = regionOf(d);
-        return reg ? `${d.properties.name} County — Region ${reg.name}` : `${d.properties.name} County`;
+        return reg
+          ? `${TEXT.countyDisplay(d.properties.name)} — ${TEXT.regionPrefix}${reg.name}`
+          : `${TEXT.countyDisplay(d.properties.name)}`;
       });
 
     // Click / tap selects a county (all devices) → updates shared result line
@@ -410,7 +479,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
 
     // Search — highlights the matching county and shows its region
     searchInput.addEventListener("input", function () {
-      const val = this.value.trim().toLowerCase().replace(/\s*county\s*$/i, "");
+      const val = stripCountyWords(this.value);
       clearHighlights();
       hideHoverTip();
       selectedPath = null;
@@ -425,10 +494,10 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       } else {
         const matches = Object.keys(countyNameToFips).filter(c => c.startsWith(val)).slice(0, 4);
         if (matches.length) {
-          resultLine.textContent = "Did you mean: " + matches.map(cap).join(", ") + "?";
+          resultLine.textContent = TEXT.didYouMean + matches.map(c => IS_ES ? TEXT.countyDisplay(cap(c)) : cap(c)).join(", ") + TEXT.didYouMeanEnd;
           resultLine.className = "";
         } else {
-          resultLine.textContent = "County not found. Try without \"County\".";
+          resultLine.textContent = TEXT.notFound;
           resultLine.className = "not-found";
         }
         setTimeout(postHeight, 50);
