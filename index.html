@@ -224,6 +224,14 @@ function selectCounty(pathEl, countyName, reg) {
   selectedPath = pathEl;
   highlightCounty(pathEl);
   showResult(countyName, reg);
+
+  // Send selected county/region to Qualtrics parent page for auto-select.
+  window.parent.postMessage({
+    type: "cbcRegion",
+    region: reg.label,
+    regionName: reg.name,
+    county: countyName
+  }, "*");
 }
 
 // --- Iframe auto-height --------------------------------------------------
