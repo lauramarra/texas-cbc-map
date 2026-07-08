@@ -41,12 +41,12 @@
     box-shadow: 0 0 0 3px rgba(51,63,72,0.2);
   }
   #search-result {
-    font-size: 13px; min-height: 20px;
-    width: 100%; color: #333f48; font-weight: 500;
+    font-size: 15px; min-height: 22px;
+    width: 100%; color: #333f48; font-weight: 700;
   }
-  #search-result.not-found { color: #c0392b; }
+  #search-result.not-found { color: #c0392b; font-weight: 500; }
 
-  #wrap { position: relative; width: 100%; }
+  #wrap { position: relative; width: 100%; max-width: 700px; margin: 0 auto; }
 
   svg#map { width: 100%; height: auto; display: none; }
 
@@ -65,21 +65,6 @@
   #tip .cn { font-size: 15px; font-weight: 700; color: #333f48; margin-bottom: 3px; }
   #tip .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; }
 
-  /* Selected-county info box, centered below the map */
-  #info-box {
-    display: none;
-    background: #fff;
-    border: 2px solid #333f48;
-    border-radius: 8px;
-    padding: 10px 14px;
-    margin: 8px auto 0;
-    max-width: 400px;
-    font-size: 13px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-  }
-  #info-box .cn { font-size: 15px; font-weight: 700; color: #333f48; margin-bottom: 3px; }
-  #info-box .rn { font-size: 13px; font-weight: 700; color: #1a4a5a; margin-bottom: 2px; }
-  #info-box .ss { font-size: 12px; color: #444; }
 
   #sr-announce {
     position: absolute; left: -9999px;
@@ -119,7 +104,6 @@
     <g id="labels-layer" style="pointer-events:none;"></g>
   </svg>
   <div id="tip" role="tooltip" aria-hidden="true"></div>
-  <div id="info-box" aria-live="polite"></div>
   <div id="sr-announce" aria-live="polite" aria-atomic="true"></div>
 </div>
 
@@ -172,22 +156,33 @@ const cap = s => s.replace(/\b\w/g, c => c.toUpperCase());
 // --- DOM refs ------------------------------------------------------------
 const tip          = document.getElementById("tip");
 const wrap         = document.getElementById("wrap");
-const infoBox      = document.getElementById("info-box");
 const srAnnounce   = document.getElementById("sr-announce");
 const searchInput  = document.getElementById("county-search");
-const searchResult = document.getElementById("search-result");
+const resultLine   = document.getElementById("search-result");
 const W = 680, H = 530;
 
 let selectedPath = null;
+const TOUCH = window.matchMedia("(hover: none)").matches;
 
-// --- Tooltip / info helpers ---------------------------------------------
+// --- Highlight helpers ---------------------------------------------------
+function clearHighlights() {
+  d3.selectAll(".county-path").attr("fill", "#333f48").attr("fill-opacity", 1);
+}
+
+function highlightCounty(pathEl) {
+  clearHighlights();
+  d3.select(pathEl).attr("fill", "#bf5700").attr("fill-opacity", 1);
+}
+
+// Light hover tooltip (desktop): county + region
 function showHoverTip(mx, my, countyName, reg) {
   let lx = mx + 14, ly = my - 14;
   if (lx + 245 > W) lx = mx - 250;
   if (ly + 60 > H + 40) ly = my - 60;
   tip.style.left = lx + "px";
   tip.style.top  = ly + "px";
-  tip.innerHTML = "<div class='cn'>" + countyName + " County</div>" +
+  tip.innerHTML =
+    "<div class='cn'>" + countyName + " County</div>" +
     (reg ? "<div class='rn'>Region " + reg.name + "</div>" : "");
   tip.setAttribute("aria-hidden", "false");
   tip.style.opacity = "1";
@@ -198,30 +193,36 @@ function hideHoverTip() {
   tip.setAttribute("aria-hidden", "true");
 }
 
-function selectCounty(pathEl, countyName, reg) {
-  d3.selectAll(".county-path").attr("fill", "#333f48");
-  selectedPath = pathEl;
-  d3.select(pathEl).attr("fill", "#4f5f6e");
-
-  const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
-  infoBox.innerHTML =
-    "<div class='cn'>" + countyName + " County</div>" +
-    "<div class='rn'>Region " + reg.name + "</div>" +
-    "<div class='ss'>" + sub + "</div>";
-  infoBox.style.display = "block";
-  srAnnounce.textContent = countyName + " County — Region " + reg.name + ". " + sub + ".";
+// Shared result line — updated by search, click/tap, and keyboard
+function showResult(countyName, reg) {
+  resultLine.innerHTML =
+    "<strong>" + countyName + " County</strong> &rarr; Region " + reg.name;
+  resultLine.className = "";
+  srAnnounce.textContent = countyName + " County — Region " + reg.name + ".";
   setTimeout(postHeight, 50);
+}
+
+function clearResult() {
+  resultLine.textContent = "";
+  resultLine.className = "";
+  setTimeout(postHeight, 50);
+}
+
+// Select a county (used by tap, click, keyboard, and search)
+function selectCounty(pathEl, countyName, reg) {
+  selectedPath = pathEl;
+  highlightCounty(pathEl);
+  showResult(countyName, reg);
 }
 
 // --- Iframe auto-height --------------------------------------------------
 function postHeight() {
-  const w = window.innerWidth || document.documentElement.clientWidth;
-  let h = Math.ceil(w * (H / W)) + 80; // map aspect ratio + search bar
-  if (infoBox.style.display === "block") h += infoBox.offsetHeight + 16;
+  const wrapEl = document.getElementById("wrap");
+  // Actual rendered map width (capped at 700px via CSS)
+  const mapW = wrapEl ? wrapEl.clientWidth : Math.min(700, window.innerWidth);
+  const h = Math.ceil(mapW * (H / W)) + 70; // map height + search/result area
   window.parent.postMessage({ type: "setHeight", height: h }, "*");
 }
-
-const isTouchDevice = () => window.matchMedia("(hover: none)").matches;
 
 // --- Build map -----------------------------------------------------------
 fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
@@ -245,7 +246,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     );
 
     // County fills (interactive layer)
-    d3.select("#counties-layer").selectAll("path")
+    const countyPaths = d3.select("#counties-layer").selectAll("path")
       .data(txFeatures).join("path")
       .attr("class", "county-path")
       .attr("d", path)
@@ -258,31 +259,40 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .attr("aria-label", d => {
         const reg = regionOf(d);
         return reg ? `${d.properties.name} County — Region ${reg.name}` : `${d.properties.name} County`;
-      })
-      .on("mousemove", function (event, d) {
-        if (this !== selectedPath) d3.select(this).attr("fill", "#4f5f6e");
-        const [mx, my] = d3.pointer(event, wrap);
-        showHoverTip(mx, my, d.properties.name, regionOf(d));
-      })
-      .on("mouseleave", function () {
-        if (this !== selectedPath) d3.select(this).attr("fill", "#333f48");
-        hideHoverTip();
-      })
-      .on("click touchend", function (event, d) {
-        event.preventDefault();
-        const reg = regionOf(d);
-        if (reg) selectCounty(this, d.properties.name, reg);
-      })
+      });
+
+    // Click / tap selects a county (all devices) → updates shared result line
+    countyPaths.on("click touchend", function (event, d) {
+      event.preventDefault();
+      const reg = regionOf(d);
+      if (reg) selectCounty(this, d.properties.name, reg);
+    });
+
+    // Desktop hover: show county name only, and preview highlight
+    if (!TOUCH) {
+      countyPaths
+        .on("mousemove", function (event, d) {
+          if (this !== selectedPath) d3.select(this).attr("fill", "#4b5c68").attr("fill-opacity", 1);
+          const [mx, my] = d3.pointer(event, wrap);
+          const reg = regionOf(d);
+          showHoverTip(mx, my, d.properties.name, reg);
+        })
+        .on("mouseleave", function () {
+          if (this !== selectedPath) d3.select(this).attr("fill", "#333f48").attr("fill-opacity", 1);
+          hideHoverTip();
+        });
+    }
+
+    // Keyboard (all devices): focus previews county name, Enter/Space selects
+    countyPaths
       .on("focus", function (event, d) {
-        if (this !== selectedPath) d3.select(this).attr("fill", "#4f5f6e");
-        const reg = regionOf(d);
-        if (!reg) return;
+        if (this !== selectedPath) d3.select(this).attr("fill", "#4b5c68").attr("fill-opacity", 1);
         const b = this.getBoundingClientRect();
         const r = wrap.getBoundingClientRect();
-        showHoverTip(b.left - r.left + b.width / 2, b.top - r.top + b.height / 2, d.properties.name, reg);
+        showHoverTip(b.left - r.left + b.width / 2, b.top - r.top + b.height / 2, d.properties.name, regionOf(d));
       })
       .on("blur", function () {
-        if (this !== selectedPath) d3.select(this).attr("fill", "#333f48");
+        if (this !== selectedPath) d3.select(this).attr("fill", "#333f48").attr("fill-opacity", 1);
         hideHoverTip();
       })
       .on("keydown", function (event, d) {
@@ -293,16 +303,16 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
         }
       });
 
-    // Hide hover tooltip only when the pointer leaves the whole map
-    d3.select("#map").on("mouseleave", function () {
-      if (!isTouchDevice()) {
+    // Reset hover preview when pointer leaves the whole map (desktop),
+    // but keep the selected county highlighted
+    if (!TOUCH) {
+      d3.select("#map").on("mouseleave", function () {
         hideHoverTip();
-        // Reset any hover highlight, but keep the clicked selection
         d3.selectAll(".county-path").attr("fill", function () {
-          return this === selectedPath ? "#4f5f6e" : "#333f48";
-        });
-      }
-    });
+          return this === selectedPath ? "#bf5700" : "#333f48";
+        }).attr("fill-opacity", 1);
+      });
+    }
 
     // Thick white region borders
     const regionMesh = topojson.mesh(us, us.objects.counties, (a, b) =>
@@ -347,42 +357,40 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     requestAnimationFrame(() => setTimeout(postHeight, 200));
     window.addEventListener("resize", postHeight);
 
-    // Search
+    // Search — highlights the matching county and shows its region
     searchInput.addEventListener("input", function () {
       const val = this.value.trim().toLowerCase().replace(/\s*county\s*$/i, "");
-      searchResult.textContent = "";
-      searchResult.className = "";
-      d3.selectAll(".county-path").attr("fill", "#333f48").attr("opacity", 1);
+      clearHighlights();
       hideHoverTip();
-      if (!val) return;
+      selectedPath = null;
+      if (!val) { clearResult(); return; }
 
       const fips = countyNameToFips[val];
       if (fips) {
-        const ri = fipsToRegion[fips];
-        const reg = REGIONS[ri];
-        const sub = reg.legacy ? "DFPS Legacy Area" : "SSCC: " + reg.sscc;
-        searchResult.textContent = `${cap(val)} County → Region ${reg.name} (${sub})`;
-        d3.selectAll(".county-path")
-          .attr("opacity", d => fipsToRegion[String(d.id)] === ri ? 1 : 0.3)
-          .attr("fill", d => fipsToRegion[String(d.id)] === ri ? "#4f5f6e" : "#333f48");
+        const reg = REGIONS[fipsToRegion[fips]];
+        // Select that county so search and map agree
+        const pathEl = countyPaths.filter(d => String(d.id) === fips).node();
+        if (pathEl) selectCounty(pathEl, cap(val), reg);
       } else {
         const matches = Object.keys(countyNameToFips).filter(c => c.startsWith(val)).slice(0, 4);
         if (matches.length) {
-          searchResult.textContent = "Did you mean: " + matches.map(cap).join(", ") + "?";
+          resultLine.textContent = "Did you mean: " + matches.map(cap).join(", ") + "?";
+          resultLine.className = "";
         } else {
-          searchResult.textContent = "County not found. Try without \"County\".";
-          searchResult.className = "not-found";
+          resultLine.textContent = "County not found. Try without \"County\".";
+          resultLine.className = "not-found";
         }
+        setTimeout(postHeight, 50);
       }
-      setTimeout(postHeight, 50);
     });
 
     searchInput.addEventListener("keydown", function (e) {
       if (e.key === "Escape") {
         this.value = "";
-        searchResult.textContent = "";
-        d3.selectAll(".county-path").attr("fill", "#333f48").attr("opacity", 1);
+        clearHighlights();
         hideHoverTip();
+        selectedPath = null;
+        clearResult();
       }
     });
   });
