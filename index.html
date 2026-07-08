@@ -220,7 +220,7 @@ function postHeight() {
   const wrapEl = document.getElementById("wrap");
   // Actual rendered map width (capped at 700px via CSS)
   const mapW = wrapEl ? wrapEl.clientWidth : Math.min(700, window.innerWidth);
-  const h = Math.ceil(mapW * (H / W)) + 70; // map height + search/result area
+  const h = Math.ceil(mapW * (H / W)) + 140; // map height + search/result area
   window.parent.postMessage({ type: "setHeight", height: h }, "*");
 }
 
