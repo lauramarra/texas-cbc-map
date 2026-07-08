@@ -306,7 +306,7 @@ function selectCounty(pathEl, countyName, reg) {
 
   // Keep the county lookup field in sync with map clicks/taps/keyboard selection.
   // This prevents an old typed county from remaining in the search box after a map selection.
-  searchInput.value = IS_ES ? TEXT.countyDisplay(countyName) : countyName;
+  searchInput.value = countyName;
 
   highlightCounty(pathEl);
   showResult(countyName, reg);
@@ -348,7 +348,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .sort((a, b) => a.localeCompare(b));
 
     countyList.innerHTML = countyNames
-      .map(name => "<option value=\"" + (IS_ES ? TEXT.countyDisplay(name) : name) + "\"></option>")
+      .map(name => "<option value=\"" + name + "\"></option>")
       .join("");
 
     // Fit projection to Texas
@@ -494,7 +494,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       } else {
         const matches = Object.keys(countyNameToFips).filter(c => c.startsWith(val)).slice(0, 4);
         if (matches.length) {
-          resultLine.textContent = TEXT.didYouMean + matches.map(c => IS_ES ? TEXT.countyDisplay(cap(c)) : cap(c)).join(", ") + TEXT.didYouMeanEnd;
+          resultLine.textContent = TEXT.didYouMean + matches.map(cap).join(", ") + TEXT.didYouMeanEnd;
           resultLine.className = "";
         } else {
           resultLine.textContent = TEXT.notFound;
