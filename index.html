@@ -105,7 +105,9 @@
     autocomplete="off"
     aria-label="Search for a Texas county by name"
     aria-describedby="search-result"
+    list="county-list"
   />
+  <datalist id="county-list"></datalist>
   <div id="search-result" role="status" aria-live="polite"></div>
 </div>
 
@@ -176,6 +178,7 @@ const tip          = document.getElementById("tip");
 const wrap         = document.getElementById("wrap");
 const srAnnounce   = document.getElementById("sr-announce");
 const searchInput  = document.getElementById("county-search");
+const countyList   = document.getElementById("county-list");
 const resultLine   = document.getElementById("search-result");
 const W = 680, H = 530;
 
@@ -233,6 +236,11 @@ function selectCounty(pathEl, countyName, reg) {
   selectedPath = pathEl;
   d3.selectAll(".county-path").attr("aria-pressed", "false");
   d3.select(pathEl).attr("aria-pressed", "true");
+
+  // Keep the county lookup field in sync with map clicks/taps/keyboard selection.
+  // This prevents an old typed county from remaining in the search box after a map selection.
+  searchInput.value = countyName;
+
   highlightCounty(pathEl);
   showResult(countyName, reg);
 
@@ -265,6 +273,16 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
     const txState    = states.features.find(f => String(f.id) === "48");
 
     txFeatures.forEach(f => { countyNameToFips[f.properties.name.toLowerCase()] = String(f.id); });
+
+    // Native selectable autocomplete for county search.
+    // Keeps keyboard/mobile behavior accessible while allowing users to choose a county.
+    const countyNames = Object.keys(countyNameToFips)
+      .map(cap)
+      .sort((a, b) => a.localeCompare(b));
+
+    countyList.innerHTML = countyNames
+      .map(name => "<option value=\"" + name + "\"></option>")
+      .join("");
 
     // Fit projection to Texas
     const p0 = d3.geoPath();
