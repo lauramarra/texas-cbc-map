@@ -64,6 +64,12 @@
 
   .county-path:focus { outline: none; }
 
+  .county-path:focus-visible {
+    stroke: #ffbf47 !important;
+    stroke-width: 2.5 !important;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.45));
+  }
+
   /* Floating hover tooltip (county + region) */
   #tip {
     position: absolute;
@@ -104,7 +110,7 @@
 </div>
 
 <span id="map-desc" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;">
-  An interactive map of Texas showing all 254 counties grouped into DFPS Community-Based Care regions numbered 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A, and 11B. Use the search box above or hover over counties to identify your region.
+  An interactive map of Texas showing all 254 counties grouped into DFPS Community-Based Care regions numbered 1, 2, 3E, 3W, 4, 5, 6A, 6B, 7A, 7B, 8A, 8B, 9, 10, 11A, and 11B. Use the search box above, hover over counties, or tab to a county and press Enter or Space to identify your region.
 </span>
 
 <div id="wrap" role="region" aria-label="Interactive map of Texas DFPS CBC regions" aria-describedby="map-desc">
@@ -178,7 +184,10 @@ const TOUCH = window.matchMedia("(hover: none)").matches;
 
 // --- Highlight helpers ---------------------------------------------------
 function clearHighlights() {
-  d3.selectAll(".county-path").attr("fill", "#333f48").attr("fill-opacity", 1);
+  d3.selectAll(".county-path")
+    .attr("fill", "#333f48")
+    .attr("fill-opacity", 1)
+    .attr("aria-pressed", "false");
 }
 
 function highlightCounty(pathEl) {
@@ -209,7 +218,7 @@ function hideHoverTip() {
 function showResult(countyName, reg) {
   resultLine.textContent = countyName + " County → Region " + reg.name;
   resultLine.className = "";
-  srAnnounce.textContent = countyName + " County — Region " + reg.name + ".";
+  srAnnounce.textContent = "Selected " + countyName + " County. Region " + reg.name + ".";
   setTimeout(postHeight, 50);
 }
 
@@ -222,6 +231,8 @@ function clearResult() {
 // Select a county (used by tap, click, keyboard, and search)
 function selectCounty(pathEl, countyName, reg) {
   selectedPath = pathEl;
+  d3.selectAll(".county-path").attr("aria-pressed", "false");
+  d3.select(pathEl).attr("aria-pressed", "true");
   highlightCounty(pathEl);
   showResult(countyName, reg);
 
@@ -276,6 +287,7 @@ fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-albers-10m.json")
       .attr("cursor", "pointer")
       .attr("tabindex", "0")
       .attr("role", "button")
+      .attr("aria-pressed", "false")
       .attr("aria-label", d => {
         const reg = regionOf(d);
         return reg ? `${d.properties.name} County — Region ${reg.name}` : `${d.properties.name} County`;
